@@ -1,0 +1,14 @@
+NRRD0004
+# Complete NRRD file format specification at:
+# http://teem.sourceforge.net/nrrd/format.html
+content: gte(???,0.25)
+type: float
+dimension: 3
+space: left-posterior-superior
+sizes: 145 174 145
+space directions: (1.25,0,0) (0,-1.25,0) (0,0,1.25)
+kinds: domain domain domain
+endian: little
+encoding: gzip
+space origin: (-90,126,-72)
+data file: dti_1000_FA_mask.raw.gz

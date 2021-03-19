@@ -1,0 +1,13 @@
+NRRD0004
+# Complete NRRD file format specification at:
+# http://teem.sourceforge.net/nrrd/format.html
+type: float
+dimension: 4
+space dimension: 4
+sizes: 145 174 145 6
+space directions: (1.25,0,0,0) (0,-1.25,0,0) (0,0,1.25,0) (0,0,0,1)
+kinds: domain domain domain domain
+endian: little
+encoding: gzip
+space origin: (-90,126,-72,0)
+data file: dti_1000_tensor.raw.gz
