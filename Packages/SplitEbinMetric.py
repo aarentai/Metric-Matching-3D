@@ -28,8 +28,9 @@ def trKsquare(B, A):
 def Squared_distance_Ebin(g0, g1, a, mask):
     #     inputs: g0.shape, g1.shape = [h, w, d, 3, 3]
     #     output: scalar
+    #     a = 1/dim
     inv_g0_g1 = torch.einsum("...ik,...kj->...ij", torch.inverse(g0), g1)
-    trK0square = trKsquare(g0, g1) - torch.log(torch.det(inv_g0_g1)) ** 2 / 3.
+    trK0square = trKsquare(g0, g1) - torch.log(torch.det(inv_g0_g1)) ** 2 *a#/ 3.
     #     trK0square is simply the tr(K^2_0) in Ebin_metric.pdf Eq.(3)
     theta = torch.min((trK0square / a + 1e-40).sqrt() / 4., torch.tensor(np.pi))
     alpha, beta = torch.det(g0).pow(1. / 4.), torch.det(g1).pow(1. / 4.)

@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from tqdm import tqdm
 from Packages.RegistrationFunc import *
 from Packages.SplitEbinMetric import *
 from Packages.GeoPlot import *
@@ -26,20 +27,20 @@ def phi_pullback(phi, g):
 
 
 # define the energy functional
-def energy_ebin(phi, g0, g1, f0, f1, sigma, lambd, mask):
-#     input: phi.shape = [3, h, w, d]; g0/g1/f0/f1.shape = [h, w, d, 3, 3]; sigma/lambd = scalar; mask.shape = [1, h, w, d]
+def energy_ebin(phi, g0, g1, f0, f1, sigma, a, mask):
+#     input: phi.shape = [3, h, w, d]; g0/g1/f0/f1.shape = [h, w, d, 3, 3]; sigma/a = scalar; mask.shape = [1, h, w, d]
 #     output: scalar
 # the phi here is identity
     phi_star_g1 = phi_pullback(phi, g1)
     phi_star_f1 = phi_pullback(phi, f1)# the compose operation in this step uses a couple of thousands MB of memory
-    E1 = sigma * Squared_distance_Ebin(f0, phi_star_f1, lambd, mask)
-    E2 = Squared_distance_Ebin(g0, phi_star_g1, lambd, mask)
+    E1 = sigma * Squared_distance_Ebin(f0, phi_star_f1, a, mask)
+    E2 = Squared_distance_Ebin(g0, phi_star_g1, a, mask)
     return E1 + E2
 
 
 # define the energy functional
 def energy_l2(phi, g0, g1, f0, f1, sigma, mask):
-#     input: phi.shape = [3, h, w, d]; g0/g1/f0/f1.shape = [h, w, d, 3, 3]; sigma/lambd = scalar; mask.shape = [1, h, w, d]
+#     input: phi.shape = [3, h, w, d]; g0/g1/f0/f1.shape = [h, w, d, 3, 3]; sigma = scalar; mask.shape = [1, h, w, d]
 #     output: scalar
     phi_star_g1 = phi_pullback(phi, g1)
     phi_star_f1 = phi_pullback(phi, f1)
@@ -88,13 +89,10 @@ if __name__ == "__main__":
     # torch.cuda.empty_cache()
     # torch.set_default_tensor_type('torch.cuda.DoubleTensor')
     torch.set_default_tensor_type('torch.DoubleTensor')
-    # g00 = sitk.GetArrayFromImage(sitk.ReadImage('Data3D/103818/dti_1000_tensor.nhdr'))
     g00 = sitk.GetArrayFromImage(sitk.ReadImage('/usr/sci/projects/HCP/Kris/NSFCRCNS/TestData/3D/metpy_3D_cubic4_tens.nhdr'))
     g00 = torch.from_numpy(g00).double().permute(3,2,1,0)
-    # g11 = sitk.GetArrayFromImage(sitk.ReadImage('Data3D/105923/dti_1000_tensor.nhdr'))
     g11 = sitk.GetArrayFromImage(sitk.ReadImage('/usr/sci/projects/HCP/Kris/NSFCRCNS/TestData/3D/metpy_3D_cubic6_tens.nhdr'))
     g11 = torch.from_numpy(g11).double().permute(3,2,1,0)
-    # mask = sitk.GetArrayFromImage(sitk.ReadImage('Data3D/105923/dti_1000_FA_mask.nhdr'))
     mask = sitk.GetArrayFromImage(sitk.ReadImage('/usr/sci/projects/HCP/Kris/NSFCRCNS/TestData/3D/metpy_3D_cubic6_mask.nhdr'))
     mask = torch.from_numpy(mask).double().permute(2,1,0).unsqueeze(0)#.to(device='cuda') #.half()
 
@@ -123,10 +121,10 @@ if __name__ == "__main__":
     # del g00, g11
     # torch.cuda.empty_cache()
 
-    lambd = 1. / 3.
+    dim = 3
     sigma = 0
     # epsilon = 5e4 # without ada
-    epsilon = 5
+    epsilon = 5e-3
     Num_ite = 20#20
 
     phi_inv = get_idty(height, width, depth)
@@ -143,12 +141,12 @@ if __name__ == "__main__":
     E_all = []
 
     # L2
-    # for i in range(Num_ite):
+    # for i in tqdm(range(Num_ite)):
     #     phi_actsg0 = phi_pullback(phi_inv, g0)
     #     phi_actsf0 = phi_pullback(phi_inv, f0)
 
     #     E0 = E.clone()
-    #     E = energy_l2(idty, phi_actsg0, g1, phi_actsf0, f1, sigma, mask)  # , lambd)
+    #     E = energy_l2(idty, phi_actsg0, g1, phi_actsf0, f1, sigma, mask)  # , 1./dim)
     #     E.backward()
 
     #     if (E - E0) / E0 > 1e-8:
@@ -200,14 +198,14 @@ if __name__ == "__main__":
     # f1 = torch.eye(3, dtype=torch.double).repeat(height, width, depth, 1, 1).permute(3, 4, 0, 1, 2)
     # E = torch.tensor([np.inf], dtype=torch.double)
     #
-    for i in range(Num_ite):
-        print(i)
+    for i in tqdm(range(Num_ite)):
+        # print(i)
         phi_actsg0 = phi_pullback(phi_inv, g0)
         phi_actsf0 = phi_pullback(phi_inv, f0)
 
         # with torch.autograd.set_detect_anomaly(True):
         E0 = E.clone()
-        E = energy_ebin(idty, phi_actsg0, g1, phi_actsf0, f1, sigma, lambd, mask)
+        E = energy_ebin(idty, phi_actsg0, g1, phi_actsf0, f1, sigma, 1./dim, mask)
         E.backward()
 
         # if E > E0 and (E - E0) / E0 > 0:
@@ -217,11 +215,12 @@ if __name__ == "__main__":
 
         v = - laplace_inv(idty.grad)
         # alpha = epsilon
-        alpha = epsilon / torch.norm(idty.grad)
+        # alpha = epsilon / torch.norm(idty.grad)
         E_all.append(E.item())
 
         with torch.no_grad():
             psi = idty + alpha * v
+            print(torch.sum(psi),torch.sum(idty),torch.sum(v),epsilon)
             psi[0][psi[0] > height - 1] = height - 1
             psi[1][psi[1] > width - 1] = width - 1
             psi[2][psi[2] > depth - 1] = depth - 1
@@ -235,6 +234,7 @@ if __name__ == "__main__":
 
             phi = compose_function(psi, phi)
             phi_inv = compose_function(phi_inv, psi_inv)
+            print(torch.sum(phi),torch.sum(phi_inv))
 
             plot_diffeo(phi[:3, :, :, 20], step_size=2, show_axis=True)
             print(E.item())
